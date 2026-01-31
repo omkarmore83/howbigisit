@@ -1,0 +1,146 @@
+.search-box {
+  position: relative;
+  width: 100%;
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  width: 18px;
+  height: 18px;
+  color: #666;
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 40px 12px 40px;
+  font-size: 16px; /* Prevents zoom on iOS */
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: white;
+  -webkit-appearance: none; /* iOS fix */
+}
+
+.search-input:focus {
+  border-color: #4ECDC4;
+  box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.2);
+}
+
+.search-input::placeholder {
+  color: #999;
+}
+
+.search-input:disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.clear-button {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #999;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clear-button:hover {
+  color: #666;
+}
+
+.search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 1000;
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.search-result-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  min-height: 48px; /* Touch-friendly */
+}
+
+.search-result-item:hover,
+.search-result-item.highlighted {
+  background-color: #f5f5f5;
+}
+
+.search-result-item:active {
+  background-color: #e8e8e8;
+}
+
+.search-result-item:first-child {
+  border-radius: 8px 8px 0 0;
+}
+
+.search-result-item:last-child {
+  border-radius: 0 0 8px 8px;
+}
+
+.state-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.country-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.country-badge.us {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+.country-badge.in {
+  background-color: #fff3e0;
+  color: #e65100;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .search-input {
+    padding: 14px 44px 14px 44px;
+  }
+  
+  .search-results {
+    max-height: 200px;
+  }
+}
