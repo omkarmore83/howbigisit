@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { 
@@ -17,17 +17,20 @@ const EDGE_PAN_SPEED = 15;
 // Component to handle draggable overlays with touch support
 function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode }) {
   const map = useMap();
-  const isDragging = useRef(false);
-  const isRotating = useRef(false);
-  const dragStart = useRef(null);
+  const isDraggingRef = useRef(false);
+  const isRotatingRef = useRef(false);
+  const dragStartRef = useRef(null);
   const edgePanInterval = useRef(null);
-  const lastTouchAngle = useRef(null);
+  const lastTouchAngleRef = useRef(null);
   const geoJsonLayerRef = useRef(null);
   const overlayRef = useRef(overlay);
   const lastTapTime = useRef(0);
+  const mapRef = useRef(map);
+  const startRotationRef = useRef(0);
 
-  // Keep overlay ref updated
+  // Keep refs updated
   overlayRef.current = overlay;
+  mapRef.current = map;
 
   const style = {
     fillColor: overlay.color,
@@ -85,10 +88,11 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
 
   // Cleanup function
   const cleanup = useCallback(() => {
-    isDragging.current = false;
-    isRotating.current = false;
-    dragStart.current = null;
-    lastTouchAngle.current = null;
+    isDraggingRef.current = false;
+    isRotatingRef.current = false;
+    dragStartRef.current = null;
+    lastTouchAngleRef.current = null;
+    startRotationRef.current = 0;
     stopEdgePan();
     map.dragging.enable();
     L.DomUtil.removeClass(map.getContainer(), 'dragging-overlay');
@@ -144,20 +148,21 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
   // Start dragging
   const startDrag = useCallback((latlng, isRotationMode = false) => {
     if (isRotationMode) {
-      isRotating.current = true;
-      isDragging.current = false;
+      isRotatingRef.current = true;
+      isDraggingRef.current = false;
     } else {
-      isDragging.current = true;
-      isRotating.current = false;
+      isDraggingRef.current = true;
+      isRotatingRef.current = false;
     }
     
     const currentOverlay = overlayRef.current;
-    dragStart.current = {
+    dragStartRef.current = {
       latlng,
       centroid: [...currentOverlay.centroid],
       currentOffset: [...currentOverlay.offset],
       currentRotation: currentOverlay.rotation || 0
     };
+    startRotationRef.current = currentOverlay.rotation || 0;
     
     map.dragging.disable();
     L.DomUtil.addClass(map.getContainer(), isRotationMode ? 'rotating-overlay' : 'dragging-overlay');
@@ -166,28 +171,28 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
   // Handle mouse events
   useMapEvents({
     mousemove: (e) => {
-      if (!dragStart.current) return;
+      if (!dragStartRef.current) return;
       
       checkEdgePan(e.originalEvent.clientX, e.originalEvent.clientY);
       
-      if (isRotating.current) {
-        const startAngle = calculateAngle(overlay.centroid, dragStart.current.latlng);
+      if (isRotatingRef.current) {
+        const startAngle = calculateAngle(overlay.centroid, dragStartRef.current.latlng);
         const currentAngle = calculateAngle(overlay.centroid, e.latlng);
         const deltaAngle = currentAngle - startAngle;
-        const newRotation = dragStart.current.currentRotation + deltaAngle;
+        const newRotation = dragStartRef.current.currentRotation + deltaAngle;
         updateGeometry(overlay.offset, newRotation);
-      } else if (isDragging.current) {
-        const deltaLng = e.latlng.lng - dragStart.current.latlng.lng;
-        const deltaLat = e.latlng.lat - dragStart.current.latlng.lat;
+      } else if (isDraggingRef.current) {
+        const deltaLng = e.latlng.lng - dragStartRef.current.latlng.lng;
+        const deltaLat = e.latlng.lat - dragStartRef.current.latlng.lat;
         const newOffset = [
-          dragStart.current.currentOffset[0] + deltaLng,
-          dragStart.current.currentOffset[1] + deltaLat
+          dragStartRef.current.currentOffset[0] + deltaLng,
+          dragStartRef.current.currentOffset[1] + deltaLat
         ];
         updateGeometry(newOffset, overlay.rotation);
       }
     },
     mouseup: () => {
-      if (isDragging.current || isRotating.current) {
+      if (isDraggingRef.current || isRotatingRef.current) {
         cleanup();
       }
     }
@@ -216,6 +221,7 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
   }, [startDrag, onSelect, overlay.id, isEditMode]);
 
   // Touch event handlers - double tap to select, then drag works
+  // Only touchstart is on the element; move/end are on document to persist across re-renders
   useEffect(() => {
     const layer = geoJsonLayerRef.current;
     if (!layer) return;
@@ -258,13 +264,16 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
         e.stopPropagation();
         e.preventDefault();
         
-        isRotating.current = true;
-        isDragging.current = false;
-        lastTouchAngle.current = getTouchAngle(touches[0], touches[1]);
+        isRotatingRef.current = true;
+        isDraggingRef.current = false;
+        lastTouchAngleRef.current = getTouchAngle(touches[0], touches[1]);
+        startRotationRef.current = overlayRef.current.rotation || 0;
         
         const currentOverlay = overlayRef.current;
-        dragStart.current = {
-          ...dragStart.current,
+        dragStartRef.current = {
+          latlng: null,
+          centroid: [...currentOverlay.centroid],
+          currentOffset: [...currentOverlay.offset],
           currentRotation: currentOverlay.rotation || 0
         };
         
@@ -273,63 +282,72 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
       }
     };
 
+    element.addEventListener('touchstart', handleTouchStart, { passive: false });
+
+    return () => {
+      element.removeEventListener('touchstart', handleTouchStart);
+    };
+  }, [map, overlay.id, isEditMode, isSelected, startDrag, onSelect]);
+
+  // Document-level touch move/end handlers - these persist across GeoJSON re-renders
+  useEffect(() => {
     const handleTouchMove = (e) => {
-      if (!isDragging.current && !isRotating.current) return;
+      if (!isDraggingRef.current && !isRotatingRef.current) return;
       
-      e.stopPropagation();
       e.preventDefault();
       
       const touches = e.touches;
-      const rect = map.getContainer().getBoundingClientRect();
+      const currentMap = mapRef.current;
+      const rect = currentMap.getContainer().getBoundingClientRect();
       
-      if (touches.length === 1 && isDragging.current && dragStart.current) {
+      if (touches.length === 1 && isDraggingRef.current && dragStartRef.current) {
         const touch = touches[0];
         const point = L.point(touch.clientX - rect.left, touch.clientY - rect.top);
-        const latlng = map.containerPointToLatLng(point);
+        const latlng = currentMap.containerPointToLatLng(point);
         
         checkEdgePan(touch.clientX, touch.clientY);
         
-        const deltaLng = latlng.lng - dragStart.current.latlng.lng;
-        const deltaLat = latlng.lat - dragStart.current.latlng.lat;
+        const deltaLng = latlng.lng - dragStartRef.current.latlng.lng;
+        const deltaLat = latlng.lat - dragStartRef.current.latlng.lat;
         const newOffset = [
-          dragStart.current.currentOffset[0] + deltaLng,
-          dragStart.current.currentOffset[1] + deltaLat
+          dragStartRef.current.currentOffset[0] + deltaLng,
+          dragStartRef.current.currentOffset[1] + deltaLat
         ];
-        updateGeometry(newOffset, overlayRef.current.rotation);
-      } else if (touches.length === 2 && isRotating.current) {
+        updateGeometry(newOffset, dragStartRef.current.currentRotation);
+      } else if (touches.length === 2 && isRotatingRef.current) {
         const currentAngle = getTouchAngle(touches[0], touches[1]);
-        if (lastTouchAngle.current !== null) {
-          const deltaAngle = currentAngle - lastTouchAngle.current;
-          const newRotation = (overlayRef.current.rotation || 0) + deltaAngle;
-          updateGeometry(overlayRef.current.offset, newRotation);
+        if (lastTouchAngleRef.current !== null) {
+          const deltaAngle = currentAngle - lastTouchAngleRef.current;
+          // Accumulate rotation from start
+          const newRotation = startRotationRef.current + deltaAngle;
+          startRotationRef.current = newRotation;
+          updateGeometry(dragStartRef.current.currentOffset, newRotation);
         }
-        lastTouchAngle.current = currentAngle;
+        lastTouchAngleRef.current = currentAngle;
       }
     };
 
-    const handleTouchEnd = (e) => {
-      if (isDragging.current || isRotating.current) {
+    const handleTouchEnd = () => {
+      if (isDraggingRef.current || isRotatingRef.current) {
         cleanup();
       }
     };
 
-    element.addEventListener('touchstart', handleTouchStart, { passive: false });
-    element.addEventListener('touchmove', handleTouchMove, { passive: false });
-    element.addEventListener('touchend', handleTouchEnd, { passive: false });
-    element.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleTouchEnd, { passive: false });
+    document.addEventListener('touchcancel', handleTouchEnd, { passive: false });
 
     return () => {
-      element.removeEventListener('touchstart', handleTouchStart);
-      element.removeEventListener('touchmove', handleTouchMove);
-      element.removeEventListener('touchend', handleTouchEnd);
-      element.removeEventListener('touchcancel', handleTouchEnd);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+      document.removeEventListener('touchcancel', handleTouchEnd);
     };
-  }, [map, overlay.id, isEditMode, isSelected, startDrag, onSelect, cleanup, checkEdgePan, updateGeometry]);
+  }, [cleanup, checkEdgePan, updateGeometry]);
 
   // Global mouseup handler
   useEffect(() => {
     const handleGlobalMouseUp = () => {
-      if (isDragging.current || isRotating.current) {
+      if (isDraggingRef.current || isRotatingRef.current) {
         cleanup();
       }
     };
@@ -338,13 +356,33 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
     return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
   }, [cleanup]);
 
+  // Update layer geometry when overlay changes (for smooth dragging without key change)
+  useEffect(() => {
+    const layer = geoJsonLayerRef.current;
+    if (!layer) return;
+    
+    const geojsonData = {
+      type: 'Feature',
+      properties: overlay,
+      geometry: overlay.geometry
+    };
+    
+    // Clear and re-add data to update the geometry
+    layer.clearLayers();
+    layer.addData(geojsonData);
+    
+    // Re-apply style
+    layer.setStyle(style);
+  }, [overlay.geometry, overlay.offset, overlay.rotation, style]);
+
   const geojson = {
     type: 'Feature',
     properties: overlay,
     geometry: overlay.geometry
   };
 
-  const geoKey = `${overlay.id}-${overlay.offset[0].toFixed(4)}-${overlay.offset[1].toFixed(4)}-${(overlay.rotation || 0).toFixed(4)}`;
+  // Use stable key - only changes when overlay is added/removed, not during drag
+  const geoKey = overlay.id;
 
   return (
     <GeoJSON
