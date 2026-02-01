@@ -24,7 +24,6 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
     currentY: 0,
     startAngle: 0,
     currentRotation: 0,
-    rotatePivot: null, // {lat, lng} - point to rotate around
     element: null
   });
   const lastTapRef = useRef(0);
@@ -101,57 +100,33 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
   }, [overlay, onUpdate, pixelToLatLng]);
 
   // Apply final geometry update for rotation
-  const applyRotation = useCallback((deltaAngle, pivot) => {
+  const applyRotation = useCallback((deltaAngle) => {
     const newRotation = (overlay.rotation || 0) + deltaAngle;
     
-    // If we have a pivot point, rotate around it (which also translates the shape)
-    const rotateAround = pivot || { lng: overlay.centroid[0], lat: overlay.centroid[1] };
+    // Always rotate around the shape's current centroid for natural feel
+    const rotateAround = { lng: overlay.centroid[0], lat: overlay.centroid[1] };
     
+    // Start from original geometry and apply current offset
     let newCoords = translateCoordinates(
       overlay.originalGeometry.coordinates,
       overlay.offset[0],
       overlay.offset[1]
     );
 
-    // Rotate around the pivot point
+    // Apply the TOTAL rotation (not just delta) around centroid
     newCoords = rotateCoordinates(
       newCoords,
       rotateAround.lng,
       rotateAround.lat,
-      deltaAngle
+      newRotation
     );
-    
-    // Calculate new centroid after rotation around pivot
-    const cos = Math.cos(deltaAngle);
-    const sin = Math.sin(deltaAngle);
-    const cx = overlay.centroid[0] - rotateAround.lng;
-    const cy = overlay.centroid[1] - rotateAround.lat;
-    const newCentroidLng = rotateAround.lng + (cx * cos - cy * sin);
-    const newCentroidLat = rotateAround.lat + (cx * sin + cy * cos);
-    const newCentroid = [newCentroidLng, newCentroidLat];
-    
-    // Calculate new offset based on centroid movement
-    const newOffset = [
-      newCentroidLng - overlay.originalCentroid[0],
-      newCentroidLat - overlay.originalCentroid[1]
-    ];
 
     const newGeometry = cloneGeometry(overlay.originalGeometry);
     newGeometry.coordinates = newCoords;
 
-    // Recalculate mercator scale for new position
-    const newCentroidLatDeg = newCentroidLat;
-    const originalCentroidLat = overlay.originalCentroid[1];
-    const originalScale = getMercatorScaleFactor(originalCentroidLat);
-    const newScale = getMercatorScaleFactor(newCentroidLatDeg);
-    const visualScaleFactor = newScale / originalScale;
-
     onUpdate(overlay.id, {
-      offset: newOffset,
       geometry: newGeometry,
-      centroid: newCentroid,
-      rotation: newRotation,
-      mercatorScale: visualScaleFactor
+      rotation: newRotation
     });
     
     // Force re-render
@@ -255,26 +230,10 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
         const currentAngle = getTouchAngle(e.touches[0], e.touches[1]);
         state.currentRotation = currentAngle - state.startAngle;
         
-        // Calculate midpoint between two fingers
-        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        
-        // Store pivot point in lat/lng for final application
-        const mapRect = map.getContainer().getBoundingClientRect();
-        const pivotPoint = L.point(midX - mapRect.left, midY - mapRect.top);
-        const pivotLatLng = map.containerPointToLatLng(pivotPoint);
-        state.rotatePivot = { lng: pivotLatLng.lng, lat: pivotLatLng.lat };
-        
-        // Apply CSS rotation around the midpoint of the two fingers
+        // Apply CSS rotation around the element's center (matches centroid rotation)
         if (state.element) {
-          const elementRect = state.element.getBoundingClientRect();
-          
-          // Calculate transform origin relative to the element
-          const originX = midX - elementRect.left;
-          const originY = midY - elementRect.top;
-          
           const rotationDeg = (state.currentRotation * 180) / Math.PI;
-          state.element.style.transformOrigin = `${originX}px ${originY}px`;
+          state.element.style.transformOrigin = 'center center';
           state.element.style.transform = `rotate(${rotationDeg}deg)`;
         }
       } else if (state.mode === 'drag' && e.touches && e.touches.length === 1) {
@@ -311,7 +270,7 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
 
       // Apply the actual geometry change
       if (state.mode === 'rotate' && state.currentRotation !== 0) {
-        applyRotation(state.currentRotation, state.rotatePivot);
+        applyRotation(state.currentRotation);
       } else if (state.mode === 'drag' && (state.currentX !== 0 || state.currentY !== 0)) {
         applyDrag(state.currentX, state.currentY);
       }
