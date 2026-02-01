@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react'
 import './App.css'
 import MapView from './components/Map/MapView'
 import SearchBox from './components/Search/SearchBox'
@@ -17,6 +18,8 @@ function App() {
     selectOverlay
   } = useMapOverlays();
 
+  const [editModeId, setEditModeId] = useState(null);
+
   const {
     searchQuery,
     setSearchQuery,
@@ -27,6 +30,28 @@ function App() {
   const handleSelectState = (stateFeature) => {
     addOverlay(stateFeature);
   };
+
+  // Handle overlay selection - with optional toggle for edit mode
+  const handleSelectOverlay = useCallback((id, toggleEditMode = false) => {
+    selectOverlay(id);
+    if (toggleEditMode) {
+      setEditModeId(prev => prev === id ? null : id);
+    }
+  }, [selectOverlay]);
+
+  // Exit edit mode when removing overlay
+  const handleRemoveOverlay = useCallback((id) => {
+    if (editModeId === id) {
+      setEditModeId(null);
+    }
+    removeOverlay(id);
+  }, [editModeId, removeOverlay]);
+
+  // Exit edit mode when clearing all
+  const handleClearAll = useCallback(() => {
+    setEditModeId(null);
+    clearAllOverlays();
+  }, [clearAllOverlays]);
 
   return (
     <div className="app">
@@ -48,10 +73,12 @@ function App() {
           <OverlayList
             overlays={overlays}
             selectedOverlayId={selectedOverlayId}
-            onSelectOverlay={selectOverlay}
-            onRemoveOverlay={removeOverlay}
-            onClearAll={clearAllOverlays}
+            editModeId={editModeId}
+            onSelectOverlay={handleSelectOverlay}
+            onRemoveOverlay={handleRemoveOverlay}
+            onClearAll={handleClearAll}
             onResetOverlay={resetOverlay}
+            onToggleEditMode={(id) => setEditModeId(prev => prev === id ? null : id)}
           />
         </aside>
         
@@ -59,16 +86,22 @@ function App() {
           <MapView
             overlays={overlays}
             selectedOverlayId={selectedOverlayId}
-            onSelectOverlay={selectOverlay}
+            editModeId={editModeId}
+            onSelectOverlay={handleSelectOverlay}
             onUpdateOverlay={updateOverlay}
           />
+          {editModeId && (
+            <div className="edit-mode-banner">
+              ✏️ Edit mode: Drag to move • Double-tap to exit
+            </div>
+          )}
         </main>
       </div>
       
       <footer className="app-footer">
         <p>
-          Drag states on the map to see how the Mercator projection distorts sizes at different latitudes.
-          States appear larger near the poles and smaller near the equator.
+          Double-tap a state to enter edit mode. Drag to move, two-finger rotate.
+          States appear larger near the poles (Mercator distortion).
         </p>
       </footer>
     </div>

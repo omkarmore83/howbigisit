@@ -88,6 +88,11 @@
   border-color: #4caf50;
 }
 
+.overlay-item.editing {
+  background-color: #fff3e0;
+  border-color: #ff9800;
+}
+
 .overlay-item:last-child {
   margin-bottom: 0;
 }
@@ -113,6 +118,11 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.edit-badge {
+  margin-left: 6px;
+  font-size: 12px;
 }
 
 .overlay-details {
@@ -142,6 +152,33 @@
 .remove-button:hover,
 .remove-button:active {
   color: #ff6b6b;
+}
+
+.edit-button {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  min-width: 36px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.edit-button:hover,
+.edit-button:active {
+  background: #f5f5f5;
+  border-color: #999;
+}
+
+.edit-button.active {
+  background: #ff9800;
+  border-color: #ff9800;
 }
 
 .overlay-list-footer {

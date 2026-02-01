@@ -3,11 +3,13 @@ import './OverlayList.css';
 
 export default function OverlayList({ 
   overlays, 
-  selectedOverlayId, 
+  selectedOverlayId,
+  editModeId,
   onSelectOverlay, 
   onRemoveOverlay,
   onClearAll,
-  onResetOverlay
+  onResetOverlay,
+  onToggleEditMode
 }) {
   if (overlays.length === 0) {
     return (
@@ -16,7 +18,7 @@ export default function OverlayList({
           Search and select states to compare their sizes on the map.
         </p>
         <p className="hint">
-          <strong>Touch & drag</strong> to move • <strong>Two fingers</strong> to rotate
+          <strong>Double-tap</strong> a state to move it
         </p>
       </div>
     );
@@ -38,11 +40,12 @@ export default function OverlayList({
           const scaleChanged = scalePercent !== 100;
           const rotationDeg = overlay.rotation ? Math.round((overlay.rotation * 180) / Math.PI) : 0;
           const hasTransforms = scaleChanged || rotationDeg !== 0;
+          const isEditing = overlay.id === editModeId;
           
           return (
             <li
               key={overlay.id}
-              className={`overlay-item ${overlay.id === selectedOverlayId ? 'selected' : ''}`}
+              className={`overlay-item ${overlay.id === selectedOverlayId ? 'selected' : ''} ${isEditing ? 'editing' : ''}`}
               onClick={() => onSelectOverlay(overlay.id)}
             >
               <div 
@@ -50,7 +53,10 @@ export default function OverlayList({
                 style={{ backgroundColor: overlay.color }}
               />
               <div className="overlay-info">
-                <span className="overlay-name">{overlay.name}</span>
+                <span className="overlay-name">
+                  {overlay.name}
+                  {isEditing && <span className="edit-badge">✏️</span>}
+                </span>
                 <span className="overlay-details">
                   {overlay.country === 'US' ? '🇺🇸' : '🇮🇳'} · {area.km2} km² · {area.mi2} mi²
                 </span>
@@ -80,6 +86,16 @@ export default function OverlayList({
                 </div>
               </div>
               <button
+                className={`edit-button ${isEditing ? 'active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleEditMode(overlay.id);
+                }}
+                title={isEditing ? "Exit edit mode" : "Edit mode - drag to move"}
+              >
+                ✏️
+              </button>
+              <button
                 className="remove-button"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -95,7 +111,7 @@ export default function OverlayList({
       </ul>
       
       <div className="overlay-list-footer">
-        <p className="tip">💡 <strong>Two-finger drag</strong> to rotate • Drag near edge to scroll map</p>
+        <p className="tip">💡 <strong>Double-tap</strong> state on map or tap ✏️ to edit</p>
       </div>
     </div>
   );
