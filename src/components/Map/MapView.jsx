@@ -227,8 +227,8 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
         const deltaAngle = currentAngle - state.lastAngle;
         state.lastAngle = currentAngle;
         
-        // Apply rotation incrementally to geometry (no CSS preview)
-        applyRotation(deltaAngle);
+        // Negate angle because screen Y is inverted vs geographic coordinates
+        applyRotation(-deltaAngle);
       } else if (state.mode === 'drag' && e.touches && e.touches.length === 1) {
         const pos = getPosition(e);
         state.currentX = pos.x - state.startX;
