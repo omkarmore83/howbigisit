@@ -28,6 +28,11 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
     element: null
   });
   const lastTapRef = useRef(0);
+  const edgePanRef = useRef(null); // For edge-pan animation frame
+
+  // Edge pan configuration
+  const EDGE_THRESHOLD = 60; // pixels from edge to start panning
+  const PAN_SPEED = 8; // pixels per frame
 
   const style = {
     fillColor: overlay.color,
@@ -230,7 +235,7 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
         
         // Negate angle because screen Y is inverted vs geographic coordinates
         applyRotation(-deltaAngle);
-      } else if (state.mode === 'drag' && e.touches && e.touches.length === 1) {
+      } else if (state.mode === 'drag') {
         const pos = getPosition(e);
         state.currentX = pos.x - state.startX;
         state.currentY = pos.y - state.startY;
@@ -239,14 +244,22 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
         if (state.element) {
           state.element.style.transform = `translate(${state.currentX}px, ${state.currentY}px)`;
         }
-      } else if (state.mode === 'drag' && !e.touches) {
-        // Mouse drag
-        const pos = getPosition(e);
-        state.currentX = pos.x - state.startX;
-        state.currentY = pos.y - state.startY;
 
-        if (state.element) {
-          state.element.style.transform = `translate(${state.currentX}px, ${state.currentY}px)`;
+        // Edge-pan: pan map when dragging near edges
+        const mapContainer = map.getContainer();
+        const rect = mapContainer.getBoundingClientRect();
+        let panX = 0, panY = 0;
+
+        if (pos.x - rect.left < EDGE_THRESHOLD) panX = -PAN_SPEED;
+        else if (rect.right - pos.x < EDGE_THRESHOLD) panX = PAN_SPEED;
+        if (pos.y - rect.top < EDGE_THRESHOLD) panY = -PAN_SPEED;
+        else if (rect.bottom - pos.y < EDGE_THRESHOLD) panY = PAN_SPEED;
+
+        if (panX !== 0 || panY !== 0) {
+          // Pan the map and adjust start position to keep shape under finger
+          map.panBy([panX, panY], { animate: false });
+          state.startX += panX;
+          state.startY += panY;
         }
       }
     };
