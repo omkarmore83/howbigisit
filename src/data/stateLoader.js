@@ -5,6 +5,7 @@ const US_STATES_URL = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json';
 const INDIA_STATES_URL = 'https://raw.githubusercontent.com/geohacker/india/master/state/india_state.geojson';
 const PAKISTAN_PROVINCES_URL = 'https://raw.githubusercontent.com/PakData/GISData/master/PAK-GeoJSON/PAK_adm1.json';
 const CHINA_PROVINCES_URL = 'https://geojson.cn/api/china/100000.json';
+const CANADA_PROVINCES_URL = 'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/canada.geojson';
 
 // State areas in km² (accurate data)
 const STATE_AREAS = {
@@ -44,7 +45,13 @@ const STATE_AREAS = {
   'Liaoning': 148400, 'Anhui': 139400, 'Fujian': 123900, 'Jiangsu': 102600,
   'Zhejiang': 101800, 'Chongqing': 82400, 'Ningxia': 66400, 'Hainan': 35354,
   'Beijing': 16411, 'Tianjin': 11917, 'Shanghai': 6340, 'Hong Kong': 1105,
-  'Macau': 30, 'Taiwan': 36193
+  'Macau': 30, 'Taiwan': 36193,
+  // Canada Provinces and Territories
+  'Nunavut': 2093190, 'Quebec': 1542056, 'Northwest Territories': 1346106,
+  'British Columbia': 944735, 'Ontario': 1076395, 'Alberta': 661848,
+  'Saskatchewan': 651036, 'Manitoba': 647797, 'Yukon': 482443,
+  'Newfoundland and Labrador': 405212, 'New Brunswick': 72908,
+  'Nova Scotia': 55284, 'Prince Edward Island': 5660
 };
 
 // US state codes
@@ -92,10 +99,20 @@ const CHINA_PROVINCE_CODES = {
   'Hong Kong': 'HK', 'Macau': 'MO'
 };
 
+// Canada province/territory codes
+const CANADA_PROVINCE_CODES = {
+  'Nunavut': 'NU', 'Quebec': 'QC', 'Northwest Territories': 'NT',
+  'British Columbia': 'BC', 'Ontario': 'ON', 'Alberta': 'AB',
+  'Saskatchewan': 'SK', 'Manitoba': 'MB', 'Yukon': 'YT',
+  'Newfoundland and Labrador': 'NL', 'New Brunswick': 'NB',
+  'Nova Scotia': 'NS', 'Prince Edward Island': 'PE'
+};
+
 let cachedUSStates = null;
 let cachedIndiaStates = null;
 let cachedPakistanProvinces = null;
 let cachedChinaProvinces = null;
+let cachedCanadaProvinces = null;
 
 export async function loadUSStates() {
   if (cachedUSStates) return cachedUSStates;
@@ -220,17 +237,48 @@ export async function loadChinaProvinces() {
   }
 }
 
+export async function loadCanadaProvinces() {
+  if (cachedCanadaProvinces) return cachedCanadaProvinces;
+  
+  try {
+    const response = await fetch(CANADA_PROVINCES_URL);
+    const geojson = await response.json();
+    
+    cachedCanadaProvinces = {
+      type: 'FeatureCollection',
+      features: geojson.features.map(feature => {
+        const name = feature.properties.name || feature.properties.NAME;
+        return {
+          ...feature,
+          properties: {
+            name: name,
+            code: CANADA_PROVINCE_CODES[name] || name.substring(0, 2).toUpperCase(),
+            country: 'CA',
+            area_km2: STATE_AREAS[name] || 100000
+          }
+        };
+      }).filter(f => f.properties.name)
+    };
+    
+    return cachedCanadaProvinces;
+  } catch (error) {
+    console.error('Failed to load Canada provinces:', error);
+    return { type: 'FeatureCollection', features: [] };
+  }
+}
+
 export async function loadAllStates() {
-  const [usStates, indiaStates, pakistanProvinces, chinaProvinces] = await Promise.all([
+  const [usStates, indiaStates, pakistanProvinces, chinaProvinces, canadaProvinces] = await Promise.all([
     loadUSStates(),
     loadIndiaStates(),
     loadPakistanProvinces(),
-    loadChinaProvinces()
+    loadChinaProvinces(),
+    loadCanadaProvinces()
   ]);
   
   return {
     type: 'FeatureCollection',
-    features: [...usStates.features, ...indiaStates.features, ...pakistanProvinces.features, ...chinaProvinces.features]
+    features: [...usStates.features, ...indiaStates.features, ...pakistanProvinces.features, ...chinaProvinces.features, ...canadaProvinces.features]
   };
 }
 

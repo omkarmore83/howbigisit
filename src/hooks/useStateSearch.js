@@ -20,7 +20,8 @@ export function useStateSearch() {
             searchKey: `${f.properties.name} ${f.properties.code} ${
               f.properties.country === 'US' ? 'USA United States' : 
               f.properties.country === 'IN' ? 'India' :
-              f.properties.country === 'PK' ? 'Pakistan' : 'China'
+              f.properties.country === 'PK' ? 'Pakistan' : 
+              f.properties.country === 'CN' ? 'China' : 'Canada'
             } `.toLowerCase()
           })).sort((a, b) => a.properties.name.localeCompare(b.properties.name));
           setAllStates(states);

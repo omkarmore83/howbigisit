@@ -57,7 +57,7 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>🗺️ True Size Comparison</h1>
-        <p className="subtitle">Compare US, India, Pakistan & China state sizes on the map</p>
+        <p className="subtitle">Compare US, India, Pakistan, China & Canada state sizes on the map</p>
       </header>
       
       <div className="app-content">
