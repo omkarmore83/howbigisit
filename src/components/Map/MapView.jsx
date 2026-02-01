@@ -228,10 +228,20 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
         const currentAngle = getTouchAngle(e.touches[0], e.touches[1]);
         state.currentRotation = currentAngle - state.startAngle;
         
-        // Apply CSS rotation transform
+        // Apply CSS rotation around the shape's centroid
         if (state.element) {
+          // Get centroid position in screen coordinates
+          const centroidLatLng = L.latLng(overlay.centroid[1], overlay.centroid[0]);
+          const centroidPoint = map.latLngToContainerPoint(centroidLatLng);
+          const mapContainer = map.getContainer().getBoundingClientRect();
+          const elementRect = state.element.getBoundingClientRect();
+          
+          // Calculate transform origin relative to the element
+          const originX = centroidPoint.x + mapContainer.left - elementRect.left;
+          const originY = centroidPoint.y + mapContainer.top - elementRect.top;
+          
           const rotationDeg = (state.currentRotation * 180) / Math.PI;
-          state.element.style.transformOrigin = 'center center';
+          state.element.style.transformOrigin = `${originX}px ${originY}px`;
           state.element.style.transform = `rotate(${rotationDeg}deg)`;
         }
       } else if (state.mode === 'drag' && e.touches && e.touches.length === 1) {
