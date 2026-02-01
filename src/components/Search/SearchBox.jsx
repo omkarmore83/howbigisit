@@ -101,7 +101,8 @@ export default function SearchBox({ searchQuery, setSearchQuery, searchResults, 
             >
               <span className="state-name">{state.properties.name}</span>
               <span className={`country-badge ${state.properties.country.toLowerCase()}`}>
-                {state.properties.country === 'US' ? '🇺🇸 USA' : '🇮🇳 India'}
+                {state.properties.country === 'US' ? '🇺🇸 USA' : 
+                 state.properties.country === 'IN' ? '🇮🇳 India' : '🇵🇰 Pakistan'}
               </span>
             </li>
           ))}
