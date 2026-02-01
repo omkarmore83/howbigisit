@@ -5,7 +5,8 @@ import {
   translateCoordinates, 
   rotateCoordinates,
   cloneGeometry,
-  getMercatorScaleFactor
+  getMercatorScaleFactor,
+  getBounds
 } from '../../utils/geoUtils';
 import 'leaflet/dist/leaflet.css';
 import './MapView.css';
@@ -317,6 +318,28 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
   );
 }
 
+// Component to fly to newly added overlays
+function FlyToOverlay({ overlays }) {
+  const map = useMap();
+  const prevCountRef = useRef(overlays.length);
+
+  useEffect(() => {
+    // Only fly when a new overlay is added (count increased)
+    if (overlays.length > prevCountRef.current) {
+      const newOverlay = overlays[overlays.length - 1];
+      const bounds = getBounds(newOverlay.geometry.coordinates);
+      
+      map.flyToBounds(
+        [[bounds.minLat, bounds.minLng], [bounds.maxLat, bounds.maxLng]],
+        { padding: [50, 50], duration: 0.5 }
+      );
+    }
+    prevCountRef.current = overlays.length;
+  }, [overlays, map]);
+
+  return null;
+}
+
 // Main Map component
 export default function MapView({ overlays, selectedOverlayId, editModeId, onSelectOverlay, onUpdateOverlay }) {
   return (
@@ -335,7 +358,7 @@ export default function MapView({ overlays, selectedOverlayId, editModeId, onSel
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      
+      <FlyToOverlay overlays={overlays} />
       {overlays.map(overlay => (
         <DraggableOverlay
           key={overlay.id}
