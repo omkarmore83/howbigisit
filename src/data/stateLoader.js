@@ -78,6 +78,20 @@ const CHINA_PROVINCE_NAMES = {
   '香港特别行政区': 'Hong Kong', '澳门特别行政区': 'Macau'
 };
 
+// China province codes
+const CHINA_PROVINCE_CODES = {
+  'Beijing': 'BJ', 'Tianjin': 'TJ', 'Shanghai': 'SH', 'Chongqing': 'CQ',
+  'Hebei': 'HE', 'Shanxi': 'SX', 'Liaoning': 'LN', 'Jilin': 'JL',
+  'Heilongjiang': 'HL', 'Jiangsu': 'JS', 'Zhejiang': 'ZJ', 'Anhui': 'AH',
+  'Fujian': 'FJ', 'Jiangxi': 'JX', 'Shandong': 'SD', 'Henan': 'HA',
+  'Hubei': 'HB', 'Hunan': 'HN', 'Guangdong': 'GD', 'Hainan': 'HI',
+  'Sichuan': 'SC', 'Guizhou': 'GZ', 'Yunnan': 'YN', 'Shaanxi': 'SN',
+  'Gansu': 'GS', 'Qinghai': 'QH', 'Taiwan': 'TW',
+  'Inner Mongolia': 'NM', 'Guangxi': 'GX', 'Tibet': 'XZ',
+  'Ningxia': 'NX', 'Xinjiang': 'XJ',
+  'Hong Kong': 'HK', 'Macau': 'MO'
+};
+
 let cachedUSStates = null;
 let cachedIndiaStates = null;
 let cachedPakistanProvinces = null;
@@ -191,9 +205,9 @@ export async function loadChinaProvinces() {
           ...feature,
           properties: {
             name: englishName,
-            code: englishName ? englishName.substring(0, 2).toUpperCase() : 'XX',
+            code: CHINA_PROVINCE_CODES[englishName] || englishName.substring(0, 2).toUpperCase(),
             country: 'CN',
-            area_km2: STATE_AREAS[englishName] || 100000
+            area_km2: STATE_AREAS[englishName] || 50000
           }
         };
       }).filter(f => f.properties.name)
