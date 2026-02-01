@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { 
@@ -14,12 +14,16 @@ import './MapView.css';
 function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode }) {
   const map = useMap();
   const layerRef = useRef(null);
+  const [version, setVersion] = useState(0); // Force re-render after drag
   const dragStateRef = useRef({
     active: false,
+    mode: null, // 'drag' or 'rotate'
     startX: 0,
     startY: 0,
     currentX: 0,
     currentY: 0,
+    startAngle: 0,
+    currentRotation: 0,
     element: null
   });
   const lastTapRef = useRef(0);
@@ -45,7 +49,7 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
     };
   }, [map]);
 
-  // Apply final geometry update
+  // Apply final geometry update for drag
   const applyDrag = useCallback((dx, dy) => {
     const { dLat, dLng } = pixelToLatLng(dx, dy);
     
@@ -90,7 +94,42 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
       rotation: overlay.rotation,
       mercatorScale: visualScaleFactor
     });
+    
+    // Force re-render to show new position
+    setVersion(v => v + 1);
   }, [overlay, onUpdate, pixelToLatLng]);
+
+  // Apply final geometry update for rotation
+  const applyRotation = useCallback((deltaAngle) => {
+    const newRotation = (overlay.rotation || 0) + deltaAngle;
+    
+    let newCoords = translateCoordinates(
+      overlay.originalGeometry.coordinates,
+      overlay.offset[0],
+      overlay.offset[1]
+    );
+
+    newCoords = rotateCoordinates(
+      newCoords,
+      overlay.centroid[0],
+      overlay.centroid[1],
+      newRotation
+    );
+
+    const newGeometry = cloneGeometry(overlay.originalGeometry);
+    newGeometry.coordinates = newCoords;
+
+    onUpdate(overlay.id, {
+      offset: overlay.offset,
+      geometry: newGeometry,
+      centroid: overlay.centroid,
+      rotation: newRotation,
+      mercatorScale: overlay.mercatorScale
+    });
+    
+    // Force re-render
+    setVersion(v => v + 1);
+  }, [overlay, onUpdate]);
 
   // Set up all event handlers
   useEffect(() => {
@@ -110,7 +149,12 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
       return { x: e.clientX, y: e.clientY };
     };
 
-    // Start drag
+    // Get angle between two touch points
+    const getTouchAngle = (t1, t2) => {
+      return Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX);
+    };
+
+    // Start drag or rotate
     const handleStart = (e) => {
       const now = Date.now();
       const isTouch = e.type === 'touchstart';
@@ -125,7 +169,7 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
       }
       lastTapRef.current = now;
 
-      // Only drag if in edit mode
+      // Only drag/rotate if in edit mode
       if (!isEditMode || !isSelected) {
         onSelect(overlay.id);
         return;
@@ -134,8 +178,21 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
       e.preventDefault();
       e.stopPropagation();
 
+      // Two-finger rotation
+      if (isTouch && e.touches.length === 2) {
+        state.active = true;
+        state.mode = 'rotate';
+        state.startAngle = getTouchAngle(e.touches[0], e.touches[1]);
+        state.currentRotation = 0;
+        state.element = element;
+        map.dragging.disable();
+        return;
+      }
+
+      // Single touch/click drag
       const pos = getPosition(e);
       state.active = true;
+      state.mode = 'drag';
       state.startX = pos.x;
       state.startY = pos.y;
       state.currentX = 0;
@@ -146,40 +203,54 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
       element.style.cursor = 'grabbing';
     };
 
-    // During drag - use CSS transform for smooth movement
+    // During drag/rotate - use CSS transform for smooth movement
     const handleMove = (e) => {
       if (!state.active) return;
       
       e.preventDefault();
 
-      const pos = getPosition(e);
-      state.currentX = pos.x - state.startX;
-      state.currentY = pos.y - state.startY;
+      if (state.mode === 'rotate' && e.touches && e.touches.length === 2) {
+        const currentAngle = getTouchAngle(e.touches[0], e.touches[1]);
+        state.currentRotation = currentAngle - state.startAngle;
+        
+        // Apply CSS rotation transform
+        if (state.element) {
+          const rotationDeg = (state.currentRotation * 180) / Math.PI;
+          state.element.style.transformOrigin = 'center center';
+          state.element.style.transform = `rotate(${rotationDeg}deg)`;
+        }
+      } else if (state.mode === 'drag') {
+        const pos = getPosition(e);
+        state.currentX = pos.x - state.startX;
+        state.currentY = pos.y - state.startY;
 
-      // Apply CSS transform for instant visual feedback
-      if (state.element) {
-        state.element.style.transform = `translate(${state.currentX}px, ${state.currentY}px)`;
+        // Apply CSS translate transform
+        if (state.element) {
+          state.element.style.transform = `translate(${state.currentX}px, ${state.currentY}px)`;
+        }
       }
     };
 
-    // End drag - apply actual coordinate change
+    // End drag/rotate - apply actual coordinate change
     const handleEnd = (e) => {
       if (!state.active) return;
-
-      e.preventDefault();
 
       // Remove CSS transform
       if (state.element) {
         state.element.style.transform = '';
+        state.element.style.transformOrigin = '';
         state.element.style.cursor = '';
       }
 
       // Apply the actual geometry change
-      if (state.currentX !== 0 || state.currentY !== 0) {
+      if (state.mode === 'rotate' && state.currentRotation !== 0) {
+        applyRotation(state.currentRotation);
+      } else if (state.mode === 'drag' && (state.currentX !== 0 || state.currentY !== 0)) {
         applyDrag(state.currentX, state.currentY);
       }
 
       state.active = false;
+      state.mode = null;
       state.element = null;
       map.dragging.enable();
     };
@@ -204,7 +275,7 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
       document.removeEventListener('touchend', handleEnd);
       document.removeEventListener('touchcancel', handleEnd);
     };
-  }, [map, overlay.id, isEditMode, isSelected, onSelect, applyDrag]);
+  }, [map, overlay.id, isEditMode, isSelected, onSelect, applyDrag, applyRotation]);
 
   const onEachFeature = useCallback((feature, layer) => {
     layerRef.current = layer;
@@ -216,9 +287,12 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
     geometry: overlay.geometry
   };
 
+  // Include version to force re-render after drag/rotate ends
+  const geoKey = `${overlay.id}-${version}`;
+
   return (
     <GeoJSON
-      key={overlay.id}
+      key={geoKey}
       data={geojson}
       style={style}
       onEachFeature={onEachFeature}
