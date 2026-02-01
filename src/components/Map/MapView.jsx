@@ -159,15 +159,17 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
       const now = Date.now();
       const isTouch = e.type === 'touchstart';
       
-      // Handle double tap/click for edit mode toggle
-      if (now - lastTapRef.current < 300) {
+      // Handle double tap/click for edit mode toggle (only for single touch)
+      if (isTouch && e.touches.length === 1 && now - lastTapRef.current < 300) {
         e.preventDefault();
         e.stopPropagation();
         onSelect(overlay.id, true);
         lastTapRef.current = 0;
         return;
       }
-      lastTapRef.current = now;
+      if (isTouch && e.touches.length === 1) {
+        lastTapRef.current = now;
+      }
 
       // Only drag/rotate if in edit mode
       if (!isEditMode || !isSelected) {
@@ -178,13 +180,15 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
       e.preventDefault();
       e.stopPropagation();
 
-      // Two-finger rotation
-      if (isTouch && e.touches.length === 2) {
+      // Two-finger rotation - start immediately or switch from drag
+      if (isTouch && e.touches.length >= 2) {
         state.active = true;
         state.mode = 'rotate';
         state.startAngle = getTouchAngle(e.touches[0], e.touches[1]);
         state.currentRotation = 0;
         state.element = element;
+        // Reset any CSS transform from dragging
+        element.style.transform = '';
         map.dragging.disable();
         return;
       }
@@ -209,7 +213,18 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
       
       e.preventDefault();
 
-      if (state.mode === 'rotate' && e.touches && e.touches.length === 2) {
+      // Check if we should switch from drag to rotate (second finger added)
+      if (state.mode === 'drag' && e.touches && e.touches.length >= 2) {
+        state.mode = 'rotate';
+        state.startAngle = getTouchAngle(e.touches[0], e.touches[1]);
+        state.currentRotation = 0;
+        // Reset drag transform
+        if (state.element) {
+          state.element.style.transform = '';
+        }
+      }
+
+      if (state.mode === 'rotate' && e.touches && e.touches.length >= 2) {
         const currentAngle = getTouchAngle(e.touches[0], e.touches[1]);
         state.currentRotation = currentAngle - state.startAngle;
         
@@ -219,12 +234,21 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
           state.element.style.transformOrigin = 'center center';
           state.element.style.transform = `rotate(${rotationDeg}deg)`;
         }
-      } else if (state.mode === 'drag') {
+      } else if (state.mode === 'drag' && e.touches && e.touches.length === 1) {
         const pos = getPosition(e);
         state.currentX = pos.x - state.startX;
         state.currentY = pos.y - state.startY;
 
         // Apply CSS translate transform
+        if (state.element) {
+          state.element.style.transform = `translate(${state.currentX}px, ${state.currentY}px)`;
+        }
+      } else if (state.mode === 'drag' && !e.touches) {
+        // Mouse drag
+        const pos = getPosition(e);
+        state.currentX = pos.x - state.startX;
+        state.currentY = pos.y - state.startY;
+
         if (state.element) {
           state.element.style.transform = `translate(${state.currentX}px, ${state.currentY}px)`;
         }
