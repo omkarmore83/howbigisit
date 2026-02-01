@@ -4,6 +4,7 @@ import * as topojson from 'topojson-client';
 const US_STATES_URL = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json';
 const INDIA_STATES_URL = 'https://raw.githubusercontent.com/geohacker/india/master/state/india_state.geojson';
 const PAKISTAN_PROVINCES_URL = 'https://raw.githubusercontent.com/PakData/GISData/master/PAK-GeoJSON/PAK_adm1.json';
+const CHINA_PROVINCES_URL = 'https://geojson.cn/api/china/100000.json';
 
 // State areas in km² (accurate data)
 const STATE_AREAS = {
@@ -33,7 +34,17 @@ const STATE_AREAS = {
   // Pakistan Provinces
   'Balochistan': 347190, 'Khyber Pakhtunkhwa': 101741, 'Punjab': 205344, 'Sindh': 140914,
   'Islamabad Capital Territory': 906, 'Gilgit-Baltistan': 72971, 'Azad Kashmir': 13297,
-  'F.A.T.A.': 27220, 'Federally Administered Tribal Areas': 27220
+  'F.A.T.A.': 27220, 'Federally Administered Tribal Areas': 27220,
+  // China Provinces
+  'Xinjiang': 1664900, 'Tibet': 1228400, 'Inner Mongolia': 1183000, 'Qinghai': 722300,
+  'Sichuan': 486100, 'Heilongjiang': 454800, 'Gansu': 425800, 'Yunnan': 394100,
+  'Guangxi': 237600, 'Hunan': 211800, 'Shaanxi': 205800, 'Hebei': 188800,
+  'Jilin': 187400, 'Hubei': 185900, 'Guangdong': 179700, 'Guizhou': 176200,
+  'Henan': 167000, 'Jiangxi': 166900, 'Shandong': 157100, 'Shanxi': 156700,
+  'Liaoning': 148400, 'Anhui': 139400, 'Fujian': 123900, 'Jiangsu': 102600,
+  'Zhejiang': 101800, 'Chongqing': 82400, 'Ningxia': 66400, 'Hainan': 35354,
+  'Beijing': 16411, 'Tianjin': 11917, 'Shanghai': 6340, 'Hong Kong': 1105,
+  'Macau': 30, 'Taiwan': 36193
 };
 
 // US state codes
@@ -53,9 +64,24 @@ const US_STATE_CODES = {
   'Wisconsin': 'WI', 'Wyoming': 'WY', 'District of Columbia': 'DC'
 };
 
+// Chinese province name mapping (Chinese -> English)
+const CHINA_PROVINCE_NAMES = {
+  '北京市': 'Beijing', '天津市': 'Tianjin', '上海市': 'Shanghai', '重庆市': 'Chongqing',
+  '河北省': 'Hebei', '山西省': 'Shanxi', '辽宁省': 'Liaoning', '吉林省': 'Jilin',
+  '黑龙江省': 'Heilongjiang', '江苏省': 'Jiangsu', '浙江省': 'Zhejiang', '安徽省': 'Anhui',
+  '福建省': 'Fujian', '江西省': 'Jiangxi', '山东省': 'Shandong', '河南省': 'Henan',
+  '湖北省': 'Hubei', '湖南省': 'Hunan', '广东省': 'Guangdong', '海南省': 'Hainan',
+  '四川省': 'Sichuan', '贵州省': 'Guizhou', '云南省': 'Yunnan', '陕西省': 'Shaanxi',
+  '甘肃省': 'Gansu', '青海省': 'Qinghai', '台湾省': 'Taiwan',
+  '内蒙古自治区': 'Inner Mongolia', '广西壮族自治区': 'Guangxi', '西藏自治区': 'Tibet',
+  '宁夏回族自治区': 'Ningxia', '新疆维吾尔自治区': 'Xinjiang',
+  '香港特别行政区': 'Hong Kong', '澳门特别行政区': 'Macau'
+};
+
 let cachedUSStates = null;
 let cachedIndiaStates = null;
 let cachedPakistanProvinces = null;
+let cachedChinaProvinces = null;
 
 export async function loadUSStates() {
   if (cachedUSStates) return cachedUSStates;
@@ -149,16 +175,48 @@ export async function loadPakistanProvinces() {
   }
 }
 
+export async function loadChinaProvinces() {
+  if (cachedChinaProvinces) return cachedChinaProvinces;
+  
+  try {
+    const response = await fetch(CHINA_PROVINCES_URL);
+    const geojson = await response.json();
+    
+    cachedChinaProvinces = {
+      type: 'FeatureCollection',
+      features: geojson.features.map(feature => {
+        const chineseName = feature.properties.name;
+        const englishName = CHINA_PROVINCE_NAMES[chineseName] || chineseName;
+        return {
+          ...feature,
+          properties: {
+            name: englishName,
+            code: englishName ? englishName.substring(0, 2).toUpperCase() : 'XX',
+            country: 'CN',
+            area_km2: STATE_AREAS[englishName] || 100000
+          }
+        };
+      }).filter(f => f.properties.name)
+    };
+    
+    return cachedChinaProvinces;
+  } catch (error) {
+    console.error('Failed to load China provinces:', error);
+    return { type: 'FeatureCollection', features: [] };
+  }
+}
+
 export async function loadAllStates() {
-  const [usStates, indiaStates, pakistanProvinces] = await Promise.all([
+  const [usStates, indiaStates, pakistanProvinces, chinaProvinces] = await Promise.all([
     loadUSStates(),
     loadIndiaStates(),
-    loadPakistanProvinces()
+    loadPakistanProvinces(),
+    loadChinaProvinces()
   ]);
   
   return {
     type: 'FeatureCollection',
-    features: [...usStates.features, ...indiaStates.features, ...pakistanProvinces.features]
+    features: [...usStates.features, ...indiaStates.features, ...pakistanProvinces.features, ...chinaProvinces.features]
   };
 }
 
