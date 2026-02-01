@@ -17,7 +17,10 @@ export function useStateSearch() {
         if (mounted) {
           const states = data.features.map(f => ({
             ...f,
-            searchKey: `${f.properties.name} ${f.properties.code} ${f.properties.country === 'US' ? 'USA United States' : 'India'} `.toLowerCase()
+            searchKey: `${f.properties.name} ${f.properties.code} ${
+              f.properties.country === 'US' ? 'USA United States' : 
+              f.properties.country === 'IN' ? 'India' : 'Pakistan'
+            } `.toLowerCase()
           })).sort((a, b) => a.properties.name.localeCompare(b.properties.name));
           setAllStates(states);
         }
