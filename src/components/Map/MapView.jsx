@@ -23,7 +23,7 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
     currentX: 0,
     currentY: 0,
     startAngle: 0,
-    currentRotation: 0,
+    lastAngle: 0, // Track last angle for incremental rotation
     element: null
   });
   const lastTapRef = useRef(0);
@@ -99,25 +99,24 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
     setVersion(v => v + 1);
   }, [overlay, onUpdate, pixelToLatLng]);
 
-  // Apply final geometry update for rotation
+  // Apply incremental rotation update (called during gesture)
   const applyRotation = useCallback((deltaAngle) => {
+    if (Math.abs(deltaAngle) < 0.001) return; // Skip tiny rotations
+    
     const newRotation = (overlay.rotation || 0) + deltaAngle;
     
-    // Always rotate around the shape's current centroid for natural feel
-    const rotateAround = { lng: overlay.centroid[0], lat: overlay.centroid[1] };
-    
-    // Start from original geometry and apply current offset
+    // Rotate around the shape's current centroid
     let newCoords = translateCoordinates(
       overlay.originalGeometry.coordinates,
       overlay.offset[0],
       overlay.offset[1]
     );
 
-    // Apply the TOTAL rotation (not just delta) around centroid
+    // Apply the TOTAL rotation around centroid
     newCoords = rotateCoordinates(
       newCoords,
-      rotateAround.lng,
-      rotateAround.lat,
+      overlay.centroid[0],
+      overlay.centroid[1],
       newRotation
     );
 
@@ -129,7 +128,6 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
       rotation: newRotation
     });
     
-    // Force re-render
     setVersion(v => v + 1);
   }, [overlay, onUpdate]);
 
@@ -187,10 +185,8 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
         state.active = true;
         state.mode = 'rotate';
         state.startAngle = getTouchAngle(e.touches[0], e.touches[1]);
-        state.currentRotation = 0;
+        state.lastAngle = state.startAngle;
         state.element = element;
-        // Reset any CSS transform from dragging
-        element.style.transform = '';
         map.dragging.disable();
         return;
       }
@@ -219,7 +215,7 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
       if (state.mode === 'drag' && e.touches && e.touches.length >= 2) {
         state.mode = 'rotate';
         state.startAngle = getTouchAngle(e.touches[0], e.touches[1]);
-        state.currentRotation = 0;
+        state.lastAngle = state.startAngle;
         // Reset drag transform
         if (state.element) {
           state.element.style.transform = '';
@@ -228,14 +224,11 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
 
       if (state.mode === 'rotate' && e.touches && e.touches.length >= 2) {
         const currentAngle = getTouchAngle(e.touches[0], e.touches[1]);
-        state.currentRotation = currentAngle - state.startAngle;
+        const deltaAngle = currentAngle - state.lastAngle;
+        state.lastAngle = currentAngle;
         
-        // Apply CSS rotation around the element's center (matches centroid rotation)
-        if (state.element) {
-          const rotationDeg = (state.currentRotation * 180) / Math.PI;
-          state.element.style.transformOrigin = 'center center';
-          state.element.style.transform = `rotate(${rotationDeg}deg)`;
-        }
+        // Apply rotation incrementally to geometry (no CSS preview)
+        applyRotation(deltaAngle);
       } else if (state.mode === 'drag' && e.touches && e.touches.length === 1) {
         const pos = getPosition(e);
         state.currentX = pos.x - state.startX;
@@ -268,10 +261,8 @@ function DraggableOverlay({ overlay, isSelected, onSelect, onUpdate, isEditMode 
         state.element.style.cursor = '';
       }
 
-      // Apply the actual geometry change
-      if (state.mode === 'rotate' && state.currentRotation !== 0) {
-        applyRotation(state.currentRotation);
-      } else if (state.mode === 'drag' && (state.currentX !== 0 || state.currentY !== 0)) {
+      // Apply the actual geometry change (rotation is already applied incrementally)
+      if (state.mode === 'drag' && (state.currentX !== 0 || state.currentY !== 0)) {
         applyDrag(state.currentX, state.currentY);
       }
 
